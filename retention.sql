@@ -1,7 +1,6 @@
 WITH transactions AS (
   SELECT from_address, DATE(block_timestamp) AS created_at
   FROM `bigquery-public-data.crypto_ethereum.transactions`
-  WHERE DATE(block_timestamp) >= '2022-01-01'
 ),
 
 cohort AS (
@@ -24,36 +23,38 @@ cohort_size AS (
 
 user_activities AS (
   SELECT
-    DATE_DIFF(
-      EXTRACT(DATE from timestamp(created_at)),
-      cohort_month,
-      MONTH
-    ) as month_number,
-    A.from_address
+    DISTINCT
+      DATE_DIFF(
+        EXTRACT(DATE FROM TIMESTAMP(created_at)),
+        cohort_month,
+        MONTH
+      ) as month_number,
+      A.from_address
   FROM transactions AS A
-  LEFT JOIN cohort C 
+  LEFT JOIN cohort AS C 
   ON A.from_address = C.from_address
-  GROUP BY 2, 1
 ),
 
 retention_table AS (
   SELECT
     cohort_month,
     A.month_number,
-    COUNT(1) as num_users
+    COUNT(1) AS num_users
   FROM user_activities A
-  LEFT JOIN cohort C 
+  LEFT JOIN cohort AS C 
   ON A.from_address = C.from_address
   GROUP BY 1, 2  
 )
 
 SELECT
   A.cohort_month,
-  B.num_users as total_users,
+  B.num_users AS total_users,
   A.month_number,
   ROUND(CAST(A.num_users as float64) * 100 / B.num_users, 2) as percentage
 FROM retention_table AS A
 LEFT JOIN cohort_size AS B
 ON A.cohort_month = B.cohort_month
-WHERE A.cohort_month IS NOT NULL
+WHERE 
+  A.cohort_month IS NOT NULL
+  AND A.cohort_month >= '2022-01-01' AND A.cohort_month < '2022-11-01'
 ORDER BY 1, 3
